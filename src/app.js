@@ -29,8 +29,8 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
 }));
+app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
-app.use(cookieParser());
 
 
 app.use('/api/chatbot', chatbotRoutes);

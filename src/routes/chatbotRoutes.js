@@ -12,7 +12,7 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const client = new twilio(accountSid, authToken);
 
-// Generate QR code
+
 router.get('/generate-qr', async (req, res) => {
     try {
         const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
@@ -30,8 +30,9 @@ router.get('/generate-qr', async (req, res) => {
 
 // Chatbot interaction
 router.post('/message', async (req, res) => {
+    console.log('in')
     const { From, Body } = req.body;
-    console.log(req.body)
+    console.log(req.body,'body')
     const phoneNumber = From.replace('whatsapp:', '');
 
     let user = await User.findOne({ phoneNumber });

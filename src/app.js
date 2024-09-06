@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const chatbotRoutes = require('./routes/chatbotRoutes');
 const authRoutes = require('./routes/authRoutes');
 const twilio = require('twilio');
+const session = require('express-session');
 
 dotenv.config();
 
@@ -16,6 +17,12 @@ const client = new twilio(accountSid, authToken);
 
 const app = express();
 
+app.use(session({
+    secret: 'your-secret-key', 
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: true } 
+}));
 
 app.use(cors({
     origin: 'http://localhost:3000',
@@ -29,7 +36,6 @@ app.use(cookieParser());
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/auth', authRoutes);
 
-// Fallback route
 app.all("*", (req,res) => {
     res.status(404).json({ 'error': 'Not Found' });
 });

@@ -21,15 +21,14 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+
 router.get("/generate-qr", async (req, res) => {
   try {
     const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-    const message = "join original-colony";
-    const url = `https://wa.me/${whatsappNumber.replace(
-      "whatsapp:",
-      ""
-    )}?text=${encodeURIComponent(message)}`;
+    // This is the WhatsApp URL with just the phone number, no pre-filled message
+    const url = `https://wa.me/${whatsappNumber.replace("whatsapp:", "")}`;
 
+    // Generate the QR code for the WhatsApp number link
     const qrCodeDataURL = await QRCode.toDataURL(url);
 
     res.status(200).json({ qrCodeDataURL });

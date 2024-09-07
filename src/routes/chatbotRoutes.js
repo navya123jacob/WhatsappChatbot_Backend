@@ -30,28 +30,35 @@ router.get('/generate-qr', async (req, res) => {
 
 // Chatbot interaction
 router.post('/message', async (req, res) => {
-    console.log('in')
     const { From, Body } = req.body;
-    console.log(req.body,'body')
     const phoneNumber = From.replace('whatsapp:', '');
 
+    // Use the phone number as the session identifier
+    let userSession = req.session[phoneNumber];
+console.log(req.session[phoneNumber])
+    // If no session exists for this phone number, initialize a new one
+    if (!userSession) {
+        req.session[phoneNumber] = {};
+        userSession = req.session[phoneNumber];
+    }
+
     let user = await User.findOne({ phoneNumber });
-    console.log('Session ID:', req.sessionID);
-    console.log('Session Data:', req.session);
 
     if (!user) {
-        if (!req.session.pendingRegistration) {
-            req.session.pendingRegistration = true;
-            req.session.phoneNumber = phoneNumber;
+        if (!userSession.pendingRegistration) {
+            // Start registration process
+            userSession.pendingRegistration = true;
+            userSession.phoneNumber = phoneNumber;
 
             await client.messages.create({
                 body: 'Welcome! Please provide your name to register.',
                 from: process.env.TWILIO_WHATSAPP_NUMBER,
                 to: From
             });
-        } else if (!req.session.pendingPassword) {
-            req.session.userName = Body;
-            req.session.pendingPassword = true;
+        } else if (!userSession.pendingPassword) {
+            // Collect the user's name
+            userSession.userName = Body;
+            userSession.pendingPassword = true;
 
             await client.messages.create({
                 body: 'Please provide a strong password (6+ characters with uppercase, lowercase, digits, and special characters).',
@@ -59,6 +66,7 @@ router.post('/message', async (req, res) => {
                 to: From
             });
         } else {
+            // Collect and validate the password
             const password = Body;
             const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$/;
 
@@ -71,18 +79,17 @@ router.post('/message', async (req, res) => {
                 return;
             }
 
+            // Create a new user
             user = new User({
-                name: req.session.userName,
-                phoneNumber: req.session.phoneNumber,
+                name: userSession.userName,
+                phoneNumber: userSession.phoneNumber,
                 password
             });
 
             await user.save();
 
-            req.session.pendingRegistration = false;
-            req.session.pendingPassword = false;
-            req.session.phoneNumber = null;
-            req.session.userName = null;
+            // Clear the session after registration is complete
+            delete req.session[phoneNumber];
 
             await client.messages.create({
                 body: `Thank you, ${user.name}! You are now registered.`,
@@ -91,6 +98,7 @@ router.post('/message', async (req, res) => {
             });
         }
     } else {
+        // User is already registered
         await client.messages.create({
             body: `Hello ${user.name}, you are already registered!`,
             from: process.env.TWILIO_WHATSAPP_NUMBER,

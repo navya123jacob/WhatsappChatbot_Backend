@@ -7,7 +7,8 @@ const userSchema = new mongoose.Schema({
     isVerified: { type: Boolean, default: false },
     phoneNumber: { type: String },
     otp: { type: Number },
-    otpSentAt: { type: Date },  // Track when OTP was sent
+    otpSentAt: { type: Date },
+    otpResendRequestedAt: { type: Date },  // Field to track resend request
     sessionId: { type: String }
 });
 

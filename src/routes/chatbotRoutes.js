@@ -7,6 +7,7 @@ const natural = require('natural');
 const nodemailer = require('nodemailer');
 const tokenizer = new natural.WordTokenizer();
 const bcrypt = require('bcrypt');
+const FAQ = require('../models/faqModel');
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -230,90 +231,151 @@ router.post('/message', async (req, res) => {
             });
         }
         return;
-    } else if(user.isVerified) {
+    } else  if (user.isVerified) {
         if (user.currentStep === 'menu') {
-          const menu = `Hello ${user.name}, you are already registered! Please choose an option:
-    1. Order Status
-    2. Product Info
-    3. Check Weather
-    4. Get News
-    5. Subscribe to Daily Updates (Type "subscribe")`;
-    
-          await client.messages.create({
-            body: menu,
-            from: process.env.TWILIO_WHATSAPP_NUMBER,
-            to: From
-          });
-    
-          user.currentStep = 'awaitingMenuSelection';  
-          await user.save();
-          return;
+            let menu = `Hello ${user.name}, you are already registered! Please choose an option:
+      1. Order Status
+      2. Product Info
+      3. Check Weather
+      4. Get News`;
+
+            if (!user.isSubscribed) {
+                menu += `
+      5. Subscribe to Daily Updates (Type "subscribe")`;
+            }
+
+            menu += `
+      Type the option number or the name of the service to proceed.`;
+
+            await client.messages.create({
+                body: menu,
+                from: process.env.TWILIO_WHATSAPP_NUMBER,
+                to: From
+            });
+
+            user.currentStep = 'awaitingMenuSelection';
+            await user.save();
+            return;
         } else if (user.currentStep === 'awaitingMenuSelection') {
-   
-          switch (Body.trim()) {
-            case '1':
-              await client.messages.create({
-                body: 'You selected Order Status. Please provide your order number.',
-                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                to: From
-              });
-              user.currentStep = 'awaitingOrderNumber'; 
-              break;
-    
-            case '2':
-              await client.messages.create({
-                body: 'You selected Product Info. Please provide product details.',
-                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                to: From
-              });
-              user.currentStep = 'awaitingProductInfo'; // Update step
-              break;
-    
-            case '3':
-              await client.messages.create({
-                body: 'You selected Check Weather. Please provide your location.',
-                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                to: From
-              });
-              user.currentStep = 'awaitingWeatherLocation'; // Update step
-              break;
-    
-            case '4':
-              await client.messages.create({
-                body: 'You selected Get News. Fetching the latest news...',
-                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                to: From
-              });
-              user.currentStep = 'menu';  // After fetching news, return to the menu
-              break;
-    
-            case '5':
-            case 'subscribe':
-              await client.messages.create({
-                body: 'You are now subscribed to daily updates.',
-                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                to: From
-              });
-              user.currentStep = 'menu';  // Return to the menu after subscription
-              break;
-    
-            default:
-              await client.messages.create({
-                body: 'Invalid selection. Please choose a valid option from the menu.',
-                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                to: From
-              });
-              break;
-          }
-    
-          await user.save();
+
+            if (Body.trim().toLowerCase() === 'go back') {
+                user.currentStep = 'menu';
+                await user.save();
+
+                let menu = `Hello ${user.name}, you are already registered! Please choose an option:
+      1. Order Status
+      2. Product Info
+      3. Check Weather
+      4. Get News`;
+
+                if (!user.isSubscribed) {
+                    menu += `
+      5. Subscribe to Daily Updates (Type "subscribe")`;
+                }
+
+                menu += `
+      Type the option number or the name of the service to proceed.`;
+
+                await client.messages.create({
+                    body: menu,
+                    from: process.env.TWILIO_WHATSAPP_NUMBER,
+                    to: From
+                });
+                return;
+            }
+
+            switch (Body.trim()) {
+                case '1':
+                    await client.messages.create({
+                        body: 'You selected Order Status. Please provide your order number.',
+                        from: process.env.TWILIO_WHATSAPP_NUMBER,
+                        to: From
+                    });
+                    user.currentStep = 'awaitingOrderNumber';
+                    break;
+
+                case '2':
+                    await client.messages.create({
+                        body: 'You selected Product Info. Please provide product details.',
+                        from: process.env.TWILIO_WHATSAPP_NUMBER,
+                        to: From
+                    });
+                    user.currentStep = 'awaitingProductInfo';
+                    break;
+
+                case '3':
+                    await client.messages.create({
+                        body: 'You selected Check Weather. Please provide your location.',
+                        from: process.env.TWILIO_WHATSAPP_NUMBER,
+                        to: From
+                    });
+                    user.currentStep = 'awaitingWeatherLocation';
+                    break;
+
+                case '4':
+                    const faqs = await FAQ.find({}); // Fetch FAQs
+                    let faqResponse = 'Here are some frequently asked questions:\n';
+                    faqs.forEach((faq, index) => {
+                        faqResponse += `${index + 1}. ${faq.question}\n`;
+                    });
+                    faqResponse += 'Reply with the question number for more details.';
+                    await client.messages.create({
+                        body: faqResponse,
+                        from: process.env.TWILIO_WHATSAPP_NUMBER,
+                        to: From
+                    });
+                    user.currentStep = 'faqSelection';
+                    break;
+
+                case '5':
+                case 'subscribe':
+                    if (!user.isSubscribed) {
+                        user.isSubscribed = true;
+                        await user.save();
+                        await client.messages.create({
+                            body: 'You are now subscribed to daily updates.',
+                            from: process.env.TWILIO_WHATSAPP_NUMBER,
+                            to: From
+                        });
+                    } else {
+                        await client.messages.create({
+                            body: 'You are already subscribed to daily updates.',
+                            from: process.env.TWILIO_WHATSAPP_NUMBER,
+                            to: From
+                        });
+                    }
+                    user.currentStep = 'menu';
+                    break;
+
+                default:
+                    await client.messages.create({
+                        body: 'Invalid selection. Please choose a valid option from the menu.',
+                        from: process.env.TWILIO_WHATSAPP_NUMBER,
+                        to: From
+                    });
+                    break;
+            }
+
+            await user.save();
         }
-    
-        // Additional steps (e.g., awaiting order number, weather location) can be handled similarly.
-      }
+    }
     
       res.status(200).send('Message processed');
     });
 
-
+    const predefinedFAQs = [
+        { question: 'What is your return policy?', answer: 'We offer a 30-day return policy with full refund.' },
+        { question: 'How can I track my order?', answer: 'You can track your order using the tracking link sent to your email.' },
+        { question: 'What payment methods do you accept?', answer: 'We accept credit cards, PayPal, and other digital payment options.' },
+        { question: 'How do I contact customer support?', answer: 'You can contact us via email or call our support number.' }
+    ];
+    
+    // Store FAQs in the database
+    predefinedFAQs.forEach(async (faq) => {
+        let faqExists = await FAQ.findOne({ question: faq.question });
+        if (!faqExists) {
+            const newFaq = new FAQ(faq);
+            await newFaq.save();
+        }
+    });
 module.exports = router;

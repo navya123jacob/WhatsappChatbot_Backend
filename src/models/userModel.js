@@ -9,7 +9,11 @@ const userSchema = new mongoose.Schema({
     otp: { type: Number },
     otpSentAt: { type: Date },
     otpResendRequestedAt: { type: Date },  // Field to track resend request
-    sessionId: { type: String }
+    sessionId: { type: String },
+    currentStep: {
+        type: String,
+        default: 'menu' 
+      }
 });
 
 const User = mongoose.model('User', userSchema);

@@ -36,7 +36,7 @@ router.post('/message', async (req, res) => {
     const phoneNumber = From.replace('whatsapp:', '');
 
     let user = await User.findOne({ phoneNumber });
-
+    console.log(req.session)
     if (!user) {
         if (!req.session.pendingRegistration) {
             req.session.pendingRegistration = true;

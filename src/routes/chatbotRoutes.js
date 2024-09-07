@@ -8,7 +8,6 @@ const nodemailer = require('nodemailer');
 const tokenizer = new natural.WordTokenizer();
 const bcrypt = require('bcrypt');
 
-// Twilio setup
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const client = new twilio(accountSid, authToken);
@@ -36,21 +35,27 @@ router.get('/generate-qr', async (req, res) => {
     }
 });
 
-// Chatbot interaction
+
 router.post('/message', async (req, res) => {
     const { From, Body } = req.body;
-    const phoneNumber = From.replace('whatsapp:', '');  // Extract phone number from WhatsApp message
+    const phoneNumber = From.replace('whatsapp:', '');  
 
-    // Find or create user associated with the phone number
     let user = await User.findOne({ phoneNumber });
 
+    if (!user) {
+        await client.messages.create({
+            body: 'To start the registration process, please provide your name. If you wish to start over during registration, type "START OVER".',
+            from: process.env.TWILIO_WHATSAPP_NUMBER,
+            to: From
+        });
+        return;
+    }
+
     if (Body.toLowerCase() === 'start over') {
-        // Step 1: Delete the existing user and start the process over
         if (user) {
             await User.deleteOne({ phoneNumber });
         }
 
-        // Ask for the user's name to start the registration process again
         await client.messages.create({
             body: 'Starting over. Please provide your name to register.',
             from: process.env.TWILIO_WHATSAPP_NUMBER,
@@ -59,15 +64,13 @@ router.post('/message', async (req, res) => {
         return;
     }
 
-    if (!user) {
-        // Step 2: Create a new user and ask for name
+    if (!user.name) {
         user = new User({
             phoneNumber,
             isVerified: false,
         });
         await user.save();
 
-        // Ask for the user's name
         await client.messages.create({
             body: 'Welcome! Please provide your name to register.',
             from: process.env.TWILIO_WHATSAPP_NUMBER,
@@ -76,20 +79,17 @@ router.post('/message', async (req, res) => {
         return;
     }
 
-    if (!user.name) {
-        // Step 3: Collect the user's name
+    if (!user.password) {
         user.name = Body;
         await user.save();
 
-        // Ask for a strong password
         await client.messages.create({
             body: 'Please provide a strong password (6+ characters, including uppercase, lowercase, digits, and special characters).',
             from: process.env.TWILIO_WHATSAPP_NUMBER,
             to: From
         });
         return;
-    } else if (!user.password) {
-        // Step 4: Collect and validate the password
+    } else if (!user.email) {
         const password = Body;
         const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$/;
 
@@ -106,20 +106,30 @@ router.post('/message', async (req, res) => {
         user.password = hashedPassword;
         await user.save();
 
-        // Ask for email
         await client.messages.create({
-            body: 'Please provide your email to receive the OTP for verification.',
+            body: 'Please provide your email address to receive the OTP for verification.',
             from: process.env.TWILIO_WHATSAPP_NUMBER,
             to: From
         });
         return;
     } else if (!user.email) {
-        // Step 5: Collect the email, generate OTP, and send email
-        user.email = Body;
+        const email = Body;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (!emailRegex.test(email)) {
+            await client.messages.create({
+                body: 'The email address you provided is not valid. Please provide a valid email address.',
+                from: process.env.TWILIO_WHATSAPP_NUMBER,
+                to: From
+            });
+            return;
+        }
+
+        user.email = email;
 
         const otp = Math.floor(1000 + Math.random() * 9000);
         user.otp = otp;
-        user.otpSentAt = new Date();  // Store the time the OTP was sent
+        user.otpSentAt = new Date(); 
         await user.save();
 
         const mailOptions = {
@@ -132,15 +142,14 @@ router.post('/message', async (req, res) => {
         await transporter.sendMail(mailOptions);
 
         await client.messages.create({
-            body: 'An OTP has been sent to your email. Please enter it to verify your registration.',
+            body: 'An OTP has been sent to your email. Please enter it to verify your registration. If you do not receive the OTP within 1 minute, type "RESEND OTP" to request a new one.',
             from: process.env.TWILIO_WHATSAPP_NUMBER,
             to: From
         });
         return;
     } else if (!user.isVerified && user.otp && user.otp.toString() === Body) {
-        // Step 6: Verify OTP
         user.isVerified = true;
-        user.otp = null;  // Clear the OTP after verification
+        user.otp = null; 
         await user.save();
 
         await client.messages.create({
@@ -150,15 +159,13 @@ router.post('/message', async (req, res) => {
         });
         return;
     } else if (!user.isVerified && user.otp && user.otp.toString() !== Body) {
-        // Step 7: Resend OTP if it's been more than 1 minute
         const now = new Date();
-        const oneMinuteAgo = new Date(now.getTime() - 1 * 60 * 1000);  // 1 minute ago
+        const oneMinuteAgo = new Date(now.getTime() - 1 * 60 * 1000);  
 
         if (user.otpSentAt && user.otpSentAt < oneMinuteAgo) {
-            // Regenerate and resend OTP if more than 1 minute has passed
             const otp = Math.floor(1000 + Math.random() * 9000);
             user.otp = otp;
-            user.otpSentAt = new Date();  // Update OTP sent time
+            user.otpSentAt = new Date();  
             await user.save();
 
             const mailOptions = {
@@ -171,21 +178,19 @@ router.post('/message', async (req, res) => {
             await transporter.sendMail(mailOptions);
 
             await client.messages.create({
-                body: 'A new OTP has been sent to your email. Please check and enter it.',
+                body: 'A new OTP has been sent to your email. Please check and enter it. If you do not receive it within 1 minute, type "RESEND OTP" to request another one.',
                 from: process.env.TWILIO_WHATSAPP_NUMBER,
                 to: From
             });
         } else {
-            // If less than 1 minute, just ask to retry OTP
             await client.messages.create({
-                body: 'Incorrect OTP. Please try again or wait for a new OTP.',
+                body: 'Incorrect OTP. Please try again. If you need a new OTP, wait 1 minute and then type "RESEND OTP".',
                 from: process.env.TWILIO_WHATSAPP_NUMBER,
                 to: From
             });
         }
         return;
     } else if (user.isVerified) {
-        // User is already registered and verified
         await client.messages.create({
             body: `Hello ${user.name}, you are already registered! How can I assist you today?`,
             from: process.env.TWILIO_WHATSAPP_NUMBER,

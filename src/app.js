@@ -20,7 +20,7 @@ const app = express();
 
 app.use(
   session({
-    secret: "your-secret-key",
+    secret: "my-secret-key",
     resave: false,
     saveUninitialized: false,
     store: MongoStore.create({
@@ -30,6 +30,7 @@ app.use(
     cookie: { secure: true },
   })
 );
+app.use(cookieParser());
 
 app.use(
   cors({
@@ -62,23 +63,23 @@ mongoose
   });
 
 // Set up cron job to send daily updates at 9:00 AM every day
-// cron.schedule("0 9 * * *", async () => {
-//   console.log("Running daily cron job to send updates");
+cron.schedule("0 9 * * *", async () => {
+  console.log("Running daily cron job to send updates");
 
-//   const subscribedUsers = await User.find({ isSubscribed: true });
-//   subscribedUsers.forEach(async (user) => {
-//     try {
-//         const weatherUpdate = 'Here is your daily weather report: Sunny, 25°C.';  
-//         await client.messages.create({
-//             body: `Hello ${user.name}, ${weatherUpdate}`,
-//             from: process.env.TWILIO_WHATSAPP_NUMBER,
-//             to: user.phoneNumber 
-//         });
-//         console.log(`Sent daily update to ${user.phoneNumber}`);
-//     } catch (error) {
-//         console.error(`Failed to send daily update to ${user.phoneNumber}: `, error);
-//     }
-//   });
-// }).catch(err => {
-//     console.error('Connection error', err.message);
-// });
+  const subscribedUsers = await User.find({ isSubscribed: true });
+  subscribedUsers.forEach(async (user) => {
+    try {
+        const weatherUpdate = 'Here is your daily weather report: Sunny, 25°C.';  
+        await client.messages.create({
+            body: `Hello ${user.name}, ${weatherUpdate}`,
+            from: process.env.TWILIO_WHATSAPP_NUMBER,
+            to: user.phoneNumber 
+        });
+        console.log(`Sent daily update to ${user.phoneNumber}`);
+    } catch (error) {
+        console.error(`Failed to send daily update to ${user.phoneNumber}: `, error);
+    }
+  });
+}).catch(err => {
+    console.error('Connection error', err.message);
+});

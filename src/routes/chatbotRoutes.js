@@ -24,7 +24,7 @@ const transporter = nodemailer.createTransport({
 router.get("/generate-qr", async (req, res) => {
   try {
     const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-    const message = "Hello, I want to register.";
+    const message = "join original-colony";
     const url = `https://wa.me/${whatsappNumber.replace(
       "whatsapp:",
       ""

@@ -235,32 +235,7 @@ router.post("/message", async (req, res) => {
     }
     return;
   } else if (user.isVerified) {
-    if (user.currentStep === "menu") {
-      let menu = `Hello ${user.name}, you are already registered! Please choose an option:
-      1. Order Status
-      2. Product Info
-      3. Check Weather
-      4. Get News`;
-
-      if (!user.isSubscribed) {
-        menu += `
-      5. Subscribe to Daily Updates (Type "subscribe")`;
-      }
-
-      menu += `
-      Type the option number or the name of the service to proceed.`;
-
-      await client.messages.create({
-        body: menu,
-        from: process.env.TWILIO_WHATSAPP_NUMBER,
-        to: From,
-      });
-
-      user.currentStep = "awaitingMenuSelection";
-      await user.save();
-      return;
-    } else if (user.currentStep === "awaitingMenuSelection") {
-      if (Body.trim().toLowerCase() === "go back") {
+    if (Body.trim().toLowerCase() === "go back") {
         user.currentStep = "menu";
         await user.save();
 
@@ -268,7 +243,7 @@ router.post("/message", async (req, res) => {
       1. Order Status
       2. Product Info
       3. Check Weather
-      4. Get News`;
+      4. FAQS`;
 
         if (!user.isSubscribed) {
           menu += `
@@ -285,6 +260,32 @@ router.post("/message", async (req, res) => {
         });
         return;
       }
+    if (user.currentStep === "menu") {
+      let menu = `Hello ${user.name}, you are already registered! Please choose an option:
+      1. Order Status
+      2. Product Info
+      3. Check Weather
+      4. Get News`;
+
+      if (!user.isSubscribed) {
+        menu += `
+      5. Subscribe to Daily Updates (Type "subscribe")`;
+      }
+
+      menu += `
+      Type the option number or the name of the service to proceed.\n type 'GO BACK' to come back to menu any point of time`;
+
+      await client.messages.create({
+        body: menu,
+        from: process.env.TWILIO_WHATSAPP_NUMBER,
+        to: From,
+      });
+
+      user.currentStep = "awaitingMenuSelection";
+      await user.save();
+      return;
+    } else if (user.currentStep === "awaitingMenuSelection") {
+      
 
       switch (Body.trim()) {
         case "1":
@@ -330,32 +331,6 @@ router.post("/message", async (req, res) => {
           
           break;
 
-        case "faqSelection":
-          const selectedFaqNumber = parseInt(Body.trim());
-          if (
-            isNaN(selectedFaqNumber) ||
-            selectedFaqNumber < 1 ||
-            selectedFaqNumber > faqs.length
-          ) {
-            await client.messages.create({
-              body: "Invalid selection. Please reply with a valid question number.",
-              from: process.env.TWILIO_WHATSAPP_NUMBER,
-              to: From,
-            });
-            user.currentStep = "menu"; 
-            return;
-          }
-
-          const selectedFaq = faqs[selectedFaqNumber - 1];
-          await client.messages.create({
-            body: `${selectedFaq.question}\n\n${selectedFaq.answer}`,
-            from: process.env.TWILIO_WHATSAPP_NUMBER,
-            to: From,
-          });
-
-          user.currentStep = "menu"; 
-
-          break;
 
         case "5":
         case "subscribe":
@@ -387,6 +362,33 @@ router.post("/message", async (req, res) => {
       }
 
       await user.save();
+    }
+    else if((user.currentStep === "faqSelection")){
+        const faqs = await FAQ.find({});
+        const selectedFaqNumber = parseInt(Body.trim());
+        if (
+          isNaN(selectedFaqNumber) ||
+          selectedFaqNumber < 1 ||
+          selectedFaqNumber > faqs.length
+        ) {
+          await client.messages.create({
+            body: "Invalid selection. Please reply with a valid question number.",
+            from: process.env.TWILIO_WHATSAPP_NUMBER,
+            to: From,
+          });
+          user.currentStep = "menu"; 
+          return;
+        }
+
+        const selectedFaq = faqs[selectedFaqNumber - 1];
+        await client.messages.create({
+          body: `${selectedFaq.question}\n\n${selectedFaq.answer}`,
+          from: process.env.TWILIO_WHATSAPP_NUMBER,
+          to: From,
+        });
+
+        user.currentStep = "menu"; 
+        await user.save();
     }
   }
 

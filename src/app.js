@@ -8,6 +8,7 @@ const chatbotRoutes = require('./routes/chatbotRoutes');
 const authRoutes = require('./routes/authRoutes');
 const twilio = require('twilio');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 
 dotenv.config();
 
@@ -17,10 +18,15 @@ const client = new twilio(accountSid, authToken);
 
 const app = express();
 
+
 app.use(session({
-    secret: 'your-secret-key', 
+    secret: 'your-secret-key',
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
+    store: MongoStore.create({
+        mongoUrl: process.env.MONGO_URI,
+        collectionName: 'sessions'
+    }),
     cookie: { secure: true } 
 }));
 

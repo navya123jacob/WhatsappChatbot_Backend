@@ -15,7 +15,7 @@ const transporter = nodemailer.createTransport({
 
 
 router.post('/register', async (req, res) => {
-    const { name, email, password } = req.body;
+    const { name, email, password,phoneNumber } = req.body;
 
     try {
         await User.deleteOne({ email,isVerified:false });
@@ -26,7 +26,7 @@ router.post('/register', async (req, res) => {
 
         const otp = Math.floor(1000 + Math.random() * 9000);
 
-        const user = new User({ name, email, password: hashedPassword, otp });
+        const user = new User({ name, email, password: hashedPassword, otp,phoneNumber });
 
         const mailOptions = {
             from: process.env.EMAIL_USER,
@@ -105,7 +105,7 @@ router.post('/resend-otp', async (req, res) => {
 
 
 router.post('/login', async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password} = req.body;
 
     try {
         await User.deleteOne({ email,isVerified:false });

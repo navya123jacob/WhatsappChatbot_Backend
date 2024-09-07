@@ -31,76 +31,82 @@ router.get('/generate-qr', async (req, res) => {
 // Chatbot interaction
 router.post('/message', async (req, res) => {
     const { From, Body } = req.body;
-    const phoneNumber = From.replace('whatsapp:', '');
-
-    // Use the phone number as the session identifier
-    let userSession = req.session[phoneNumber];
-console.log(req.session[phoneNumber])
-    // If no session exists for this phone number, initialize a new one
-    if (!userSession) {
-        req.session[phoneNumber] = {};
-        userSession = req.session[phoneNumber];
-    }
+    const phoneNumber = From.replace('whatsapp:', ''); 
 
     let user = await User.findOne({ phoneNumber });
 
     if (!user) {
-        if (!userSession.pendingRegistration) {
-            // Start registration process
-            userSession.pendingRegistration = true;
-            userSession.phoneNumber = phoneNumber;
+        
+        user = new User({
+            phoneNumber,
+            isVerified: false, 
+        });
+        await user.save();
 
-            await client.messages.create({
-                body: 'Welcome! Please provide your name to register.',
-                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                to: From
-            });
-        } else if (!userSession.pendingPassword) {
-            // Collect the user's name
-            userSession.userName = Body;
-            userSession.pendingPassword = true;
-
-            await client.messages.create({
-                body: 'Please provide a strong password (6+ characters with uppercase, lowercase, digits, and special characters).',
-                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                to: From
-            });
-        } else {
-            // Collect and validate the password
-            const password = Body;
-            const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$/;
-
-            if (!strongPasswordRegex.test(password)) {
-                await client.messages.create({
-                    body: 'Password must be strong (6+ characters with uppercase, lowercase, digits, and special characters). Please try again.',
-                    from: process.env.TWILIO_WHATSAPP_NUMBER,
-                    to: From
-                });
-                return;
-            }
-
-            // Create a new user
-            user = new User({
-                name: userSession.userName,
-                phoneNumber: userSession.phoneNumber,
-                password
-            });
-
-            await user.save();
-
-            // Clear the session after registration is complete
-            delete req.session[phoneNumber];
-
-            await client.messages.create({
-                body: `Thank you, ${user.name}! You are now registered.`,
-                from: process.env.TWILIO_WHATSAPP_NUMBER,
-                to: From
-            });
-        }
-    } else {
-        // User is already registered
         await client.messages.create({
-            body: `Hello ${user.name}, you are already registered!`,
+            body: 'Welcome! Please provide your name to register.',
+            from: process.env.TWILIO_WHATSAPP_NUMBER,
+            to: From
+        });
+    } else if (!user.name) {
+        user.name = Body;
+        await user.save();
+
+        await client.messages.create({
+            body: 'Please provide a strong password (6+ characters, including uppercase, lowercase, digits, and special characters).',
+            from: process.env.TWILIO_WHATSAPP_NUMBER,
+            to: From
+        });
+    } else if (!user.password) {
+
+        const password = Body;
+        const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$/;
+
+        if (!strongPasswordRegex.test(password)) {
+            await client.messages.create({
+                body: 'Password must be strong (6+ characters with uppercase, lowercase, digits, and special characters). Please try again.',
+                from: process.env.TWILIO_WHATSAPP_NUMBER,
+                to: From
+            });
+            return;
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        user.password = hashedPassword;
+
+        // Step 5: Generate OTP for verification and send via WhatsApp
+        const otp = Math.floor(1000 + Math.random() * 9000);
+        user.otp = otp;
+        await user.save();
+
+        await client.messages.create({
+            body: `Your OTP code is ${otp}. Please send it to verify your registration.`,
+            from: process.env.TWILIO_WHATSAPP_NUMBER,
+            to: From
+        });
+
+    } else if (!user.isVerified && user.otp && user.otp.toString() === Body) {
+        // Step 6: Verify the OTP
+        user.isVerified = true;
+        user.otp = null;  // Clear the OTP after verification
+        await user.save();
+
+        await client.messages.create({
+            body: `Thank you, ${user.name}! Your registration is complete, and you are now verified.`,
+            from: process.env.TWILIO_WHATSAPP_NUMBER,
+            to: From
+        });
+    } else if (!user.isVerified && user.otp && user.otp.toString() !== Body) {
+        // Step 7: Handle incorrect OTP
+        await client.messages.create({
+            body: 'Incorrect OTP. Please try again or request a new OTP.',
+            from: process.env.TWILIO_WHATSAPP_NUMBER,
+            to: From
+        });
+    } else if (user.isVerified) {
+        // The user is already registered and verified
+        await client.messages.create({
+            body: `Hello ${user.name}, you are already registered! How can I assist you today?`,
             from: process.env.TWILIO_WHATSAPP_NUMBER,
             to: From
         });

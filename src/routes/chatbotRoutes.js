@@ -52,7 +52,7 @@ router.post('/message', async (req, res) => {
 
         // Ask for the user's name to start the registration process again
         await client.messages.create({
-            body: 'Starting over. Please provide your name to register.',
+            body: 'Starting over. Please type something.',
             from: process.env.TWILIO_WHATSAPP_NUMBER,
             to: From
         });
@@ -187,7 +187,7 @@ router.post('/message', async (req, res) => {
         await transporter.sendMail(mailOptions);
 
         await client.messages.create({
-            body: 'An OTP has been sent to your email. Please enter it to verify your registration.',
+            body: 'An OTP has been sent to your email. Please enter it to verify your registration. Wait for 1 minute and type "RESEND OTP" if you need another new OTP and "START OVER" if you want to start over the registration process.',
             from: process.env.TWILIO_WHATSAPP_NUMBER,
             to: From
         });
@@ -220,7 +220,7 @@ router.post('/message', async (req, res) => {
                 from: process.env.EMAIL_USER,
                 to: user.email,
                 subject: 'Your New OTP Code',
-                text: `Your new OTP code is ${otp}. Please enter it in WhatsApp to complete your registration. Wait for 1 minute and type 'RESEND OTP' if you need another new OTP and 'START OVER' if you want to start over the registration process.`
+                text: `Your new OTP code is ${otp}. Please enter it in WhatsApp to complete your registration.`
             };
 
             await transporter.sendMail(mailOptions);

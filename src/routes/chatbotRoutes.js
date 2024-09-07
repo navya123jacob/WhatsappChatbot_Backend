@@ -44,8 +44,23 @@ router.post('/message', async (req, res) => {
     // Find or create user associated with the phone number
     let user = await User.findOne({ phoneNumber });
 
+    if (Body.toLowerCase() === 'start over') {
+        // Step 1: Delete the existing user and start the process over
+        if (user) {
+            await User.deleteOne({ phoneNumber });
+        }
+
+        // Ask for the user's name to start the registration process again
+        await client.messages.create({
+            body: 'Starting over. Please provide your name to register.',
+            from: process.env.TWILIO_WHATSAPP_NUMBER,
+            to: From
+        });
+        return;
+    }
+
     if (!user) {
-        // Step 1: Create a new user and ask for name
+        // Step 2: Create a new user and ask for name
         user = new User({
             phoneNumber,
             isVerified: false,
@@ -62,7 +77,7 @@ router.post('/message', async (req, res) => {
     }
 
     if (!user.name) {
-        // Step 2: Collect the user's name
+        // Step 3: Collect the user's name
         user.name = Body;
         await user.save();
 
@@ -74,7 +89,7 @@ router.post('/message', async (req, res) => {
         });
         return;
     } else if (!user.password) {
-        // Step 3: Collect and validate the password
+        // Step 4: Collect and validate the password
         const password = Body;
         const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{6,}$/;
 
@@ -91,7 +106,7 @@ router.post('/message', async (req, res) => {
         user.password = hashedPassword;
         await user.save();
 
-        // Step 4: Ask for email
+        // Ask for email
         await client.messages.create({
             body: 'Please provide your email to receive the OTP for verification.',
             from: process.env.TWILIO_WHATSAPP_NUMBER,
